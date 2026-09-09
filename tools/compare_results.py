@@ -46,6 +46,56 @@ def load_environment(path: str) -> dict:
         return json.load(handle)
 
 
+def build_payload(specs: dict, golden: dict, adapters: dict,
+                  environments: dict, require: list) -> dict:
+    """Assemble the conformance report from loaded envelopes.
+
+    Kept separate from ``main`` so the report tests can build a payload in
+    process instead of reading a file that only exists after an earlier
+    pipeline step has run. A test suite whose result depends on what was run
+    before it is not a test suite.
+    """
+    missing_adapters = [a for a in require if a not in adapters]
+    records = []
+    matrix = {}
+    for adapter, envelopes in sorted(adapters.items()):
+        matrix[adapter] = {}
+        for spec_id, spec in sorted(specs.items()):
+            if spec_id not in envelopes:
+                matrix[adapter][spec_id] = {
+                    "status": "absent", "pass": 0, "fail": 0, "missing": 0, "excluded": 0
+                }
+                records.append({
+                    "spec_id": spec_id, "key": "*", "left": adapter, "right": "golden",
+                    "status": "missing", "reason": "adapter produced no envelope",
+                })
+                continue
+            recs = compare_flat(
+                flatten(envelopes[spec_id]), flatten(golden[spec_id]), spec,
+                adapter, "golden",
+            )
+            records.extend(recs)
+            counts = summarise(recs)
+            matrix[adapter][spec_id] = dict(
+                counts, status="pass" if is_green(recs) else "fail"
+            )
+
+    green = all(r["status"] in ("pass", "excluded") for r in records) and not missing_adapters
+    return {
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "adapters": sorted(adapters),
+        "environments": environments,
+        "required_adapters": list(require),
+        "missing_adapters": missing_adapters,
+        "specs": sorted(specs),
+        "matrix": matrix,
+        "totals": summarise(records),
+        "comparisons": len(records),
+        "green": green,
+        "records": records,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--results", default="results", help="directory of adapter directories")
@@ -72,45 +122,10 @@ def main() -> int:
                     adapters[name] = loaded
                     environments[name] = load_environment(directory)
 
-    missing_adapters = [a for a in args.require if a not in adapters]
-    records = []
-    matrix = {}
-    for adapter, envelopes in sorted(adapters.items()):
-        matrix[adapter] = {}
-        for spec_id, spec in sorted(specs.items()):
-            if spec_id not in envelopes:
-                matrix[adapter][spec_id] = {
-                    "status": "absent", "pass": 0, "fail": 0, "missing": 0, "excluded": 0
-                }
-                records.append({
-                    "spec_id": spec_id, "key": "*", "left": adapter, "right": "golden",
-                    "status": "missing", "reason": "adapter produced no envelope",
-                })
-                continue
-            recs = compare_flat(
-                flatten(envelopes[spec_id]), flatten(golden[spec_id]), spec,
-                adapter, "golden",
-            )
-            records.extend(recs)
-            counts = summarise(recs)
-            matrix[adapter][spec_id] = dict(
-                counts, status="pass" if is_green(recs) else "fail"
-            )
-
-    green = all(r["status"] in ("pass", "excluded") for r in records) and not missing_adapters
-    report = {
-        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "adapters": sorted(adapters),
-        "environments": environments,
-        "required_adapters": args.require,
-        "missing_adapters": missing_adapters,
-        "specs": sorted(specs),
-        "matrix": matrix,
-        "totals": summarise(records),
-        "comparisons": len(records),
-        "green": green,
-        "records": records,
-    }
+    report = build_payload(specs, golden, adapters, environments, args.require)
+    missing_adapters = report["missing_adapters"]
+    matrix = report["matrix"]
+    green = report["green"]
     out_path = os.path.join(ROOT, args.out)
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     with open(out_path, "w", encoding="utf-8", newline="\n") as handle:
