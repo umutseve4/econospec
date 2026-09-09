@@ -6,7 +6,6 @@ was given.
 """
 
 import copy
-import json
 import os
 import sys
 
@@ -15,14 +14,29 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 
 import build_report  # noqa: E402
+import compare_results  # noqa: E402
 
 from econospec.specs import load_all_specs  # noqa: E402
 
 
 def _load():
-    with open(os.path.join(ROOT, "results", "conformance.json"), "r", encoding="utf-8") as handle:
-        report = json.load(handle)
+    """Build a conformance payload here rather than reading one off disk.
+
+    The earlier version opened results/conformance.json, which only exists
+    after the comparator has already been run. On a clean checkout these five
+    tests failed for a reason that had nothing to do with the report, and on a
+    machine where the pipeline had been run they passed for a reason that had
+    nothing to do with the checkout. The payload is now assembled in process by
+    the same function the command line tool uses, from the committed golden
+    manifest compared against itself, so the tests depend only on what is in
+    the repository.
+    """
     specs = {s["id"]: s for s in load_all_specs(ROOT)}
+    golden = compare_results.load_dir(os.path.join(ROOT, "fixtures", "golden"))
+    report = compare_results.build_payload(
+        specs, golden, {"golden-self": golden}, {}, ["golden-self"]
+    )
+    assert report["green"], "the golden manifest does not agree with itself"
     return report, specs
 
 
