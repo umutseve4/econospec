@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.Rhistory
+.RData
+.DS_Store
+
+# Generated per run. The golden manifest under fixtures/golden is committed,
+# adapter output and the rendered site are not.
+results/
+site/
