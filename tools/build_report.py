@@ -366,7 +366,7 @@ def main() -> int:
     out_dir = os.path.join(ROOT, args.out)
     os.makedirs(out_dir, exist_ok=True)
     page = build(report, specs)
-    if "\\u2014" in page or "\\u2013" in page:
+    if "\u2014" in page or "\u2013" in page:
         raise SystemExit("report contains a long dash, which the house style forbids")
     index = os.path.join(out_dir, "index.html")
     with open(index, "w", encoding="utf-8", newline="\n") as handle:
