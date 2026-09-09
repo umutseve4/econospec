@@ -1,0 +1,42 @@
+{
+  "id": "iv-003",
+  "family": "iv2sls",
+  "title": "Just identified two stage least squares",
+  "case_type": "edge",
+  "narrative": "One excluded instrument for one endogenous regressor. The projection step is exactly determined, the overidentification degree of freedom is zero and any Sargan style test is undefined. This is the boundary where implementations tend to differ: some report a degenerate test statistic rather than declining to compute one, so the spec asserts the degree of freedom explicitly.",
+  "fixture": {
+    "generator": "iv_just_identified",
+    "path": "fixtures/iv-003.csv",
+    "sha256": "149c9da7102be31db35092af3243e795e06cd3b9a547916242d7aec3a9fd3e57"
+  },
+  "model": {
+    "kind": "iv2sls",
+    "response": "y",
+    "exog": [
+      "w"
+    ],
+    "endog": [
+      "d"
+    ],
+    "instruments": [
+      "z1"
+    ],
+    "intercept": true
+  },
+  "comparison": {
+    "tolerance": {
+      "rtol": 1e-09,
+      "atol": 1e-12,
+      "rationale": "Both sides read identical CSV bytes and solve the same normal equations in IEEE 754 double precision, so the only admissible difference is accumulated rounding from a different factorisation order. That is bounded well below 1e-9 relative on a well conditioned design; anything larger is a definitional disagreement, not noise.",
+      "key_overrides": [
+        {
+          "pattern": "params.*.pvalue",
+          "rtol": 1e-05,
+          "atol": 1e-300,
+          "rationale": "P-values span thirty orders of magnitude, so a fixed absolute floor would make small ones untestable. A purely relative budget of 1e-5 absorbs the amplification of coefficient rounding through the tail integral while still failing a one part in a thousand perturbation. The 1e-300 floor only handles underflow to zero."
+        }
+      ]
+    },
+    "exclude": []
+  }
+}

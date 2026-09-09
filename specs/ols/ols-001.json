@@ -1,0 +1,38 @@
+{
+  "id": "ols-001",
+  "family": "ols",
+  "title": "OLS with classical standard errors",
+  "case_type": "nominal",
+  "narrative": "The baseline case. A homoskedastic linear model with two regressors and an intercept, estimated by ordinary least squares with the classical covariance sigma squared times the inverse of X prime X. If this case ever disagrees across implementations, the disagreement is about the residual degrees of freedom or the reference distribution used for inference, not about the estimator itself, because the coefficient vector is uniquely determined by the design.",
+  "fixture": {
+    "generator": "ols_nominal",
+    "path": "fixtures/ols-001.csv",
+    "sha256": "bb46bf41770efdbf2c35b6da243870d9301f851d6a3a01baa2fbef17f3725811"
+  },
+  "model": {
+    "kind": "ols",
+    "response": "y",
+    "regressors": [
+      "x1",
+      "x2"
+    ],
+    "intercept": true,
+    "vcov": "nonrobust"
+  },
+  "comparison": {
+    "tolerance": {
+      "rtol": 1e-09,
+      "atol": 1e-12,
+      "rationale": "Both sides read identical CSV bytes and solve the same normal equations in IEEE 754 double precision, so the only admissible difference is accumulated rounding from a different factorisation order. That is bounded well below 1e-9 relative on a well conditioned design; anything larger is a definitional disagreement, not noise.",
+      "key_overrides": [
+        {
+          "pattern": "params.*.pvalue",
+          "rtol": 1e-05,
+          "atol": 1e-300,
+          "rationale": "P-values span thirty orders of magnitude, so a fixed absolute floor would make small ones untestable. A purely relative budget of 1e-5 absorbs the amplification of coefficient rounding through the tail integral while still failing a one part in a thousand perturbation. The 1e-300 floor only handles underflow to zero."
+        }
+      ]
+    },
+    "exclude": []
+  }
+}

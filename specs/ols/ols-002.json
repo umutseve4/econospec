@@ -1,0 +1,38 @@
+{
+  "id": "ols-002",
+  "family": "ols",
+  "title": "OLS with HC1 heteroskedasticity consistent errors",
+  "case_type": "violation",
+  "narrative": "The error variance grows with the absolute value of x1, so the classical standard errors are inconsistent while the coefficients remain unbiased. This case pins down the HC1 convention: the sandwich meat uses squared residuals and the correction factor is n over n minus k. R applies that factor inside sandwich::vcovHC while statsmodels applies it inside cov_type HC1, and inference stays on the t distribution with n minus k degrees of freedom on both sides.",
+  "fixture": {
+    "generator": "ols_heteroskedastic",
+    "path": "fixtures/ols-002.csv",
+    "sha256": "a355c00c6fd0770a5d45adb1d11ffe23256dce16a2b2a592543d30d38c81b300"
+  },
+  "model": {
+    "kind": "ols",
+    "response": "y",
+    "regressors": [
+      "x1",
+      "x2"
+    ],
+    "intercept": true,
+    "vcov": "HC1"
+  },
+  "comparison": {
+    "tolerance": {
+      "rtol": 1e-09,
+      "atol": 1e-12,
+      "rationale": "Both sides read identical CSV bytes and solve the same normal equations in IEEE 754 double precision, so the only admissible difference is accumulated rounding from a different factorisation order. That is bounded well below 1e-9 relative on a well conditioned design; anything larger is a definitional disagreement, not noise.",
+      "key_overrides": [
+        {
+          "pattern": "params.*.pvalue",
+          "rtol": 1e-05,
+          "atol": 1e-300,
+          "rationale": "P-values span thirty orders of magnitude, so a fixed absolute floor would make small ones untestable. A purely relative budget of 1e-5 absorbs the amplification of coefficient rounding through the tail integral while still failing a one part in a thousand perturbation. The 1e-300 floor only handles underflow to zero."
+        }
+      ]
+    },
+    "exclude": []
+  }
+}

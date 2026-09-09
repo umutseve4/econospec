@@ -1,0 +1,43 @@
+{
+  "id": "iv-002",
+  "family": "iv2sls",
+  "title": "Two stage least squares with weak instruments",
+  "case_type": "violation",
+  "narrative": "Instrument relevance is deliberately near zero, so the first stage F falls far below the conventional threshold of ten and the 2SLS estimator is badly behaved. The estimate is not expected to be near the true parameter and the suite does not pretend otherwise: what is asserted is that both implementations report the same badly behaved number and the same diagnostic, so a user can see the weakness rather than inherit it silently.",
+  "fixture": {
+    "generator": "iv_weak",
+    "path": "fixtures/iv-002.csv",
+    "sha256": "9be2708189ff6bcfc5321bfbb1e5ceb66c2339a92426d4c3cb643ffc13a2d3c4"
+  },
+  "model": {
+    "kind": "iv2sls",
+    "response": "y",
+    "exog": [
+      "w"
+    ],
+    "endog": [
+      "d"
+    ],
+    "instruments": [
+      "z1",
+      "z2"
+    ],
+    "intercept": true
+  },
+  "comparison": {
+    "tolerance": {
+      "rtol": 1e-09,
+      "atol": 1e-12,
+      "rationale": "Both sides read identical CSV bytes and solve the same normal equations in IEEE 754 double precision, so the only admissible difference is accumulated rounding from a different factorisation order. That is bounded well below 1e-9 relative on a well conditioned design; anything larger is a definitional disagreement, not noise.",
+      "key_overrides": [
+        {
+          "pattern": "params.*.pvalue",
+          "rtol": 1e-05,
+          "atol": 1e-300,
+          "rationale": "P-values span thirty orders of magnitude, so a fixed absolute floor would make small ones untestable. A purely relative budget of 1e-5 absorbs the amplification of coefficient rounding through the tail integral while still failing a one part in a thousand perturbation. The 1e-300 floor only handles underflow to zero."
+        }
+      ]
+    },
+    "exclude": []
+  }
+}

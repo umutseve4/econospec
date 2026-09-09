@@ -1,0 +1,34 @@
+{
+  "id": "adf-002",
+  "family": "adf",
+  "title": "Augmented Dickey Fuller regression on a random walk",
+  "case_type": "violation",
+  "narrative": "A pure random walk, so a unit root is present by construction and the coefficient on the lagged level should sit near zero. The statistic is expected to be small in absolute value and far from any conventional critical value. No p-value is reported for any augmented Dickey Fuller case, because under the null the t ratio does not follow a Student t distribution and the usual tabulated values are interpolation schemes that differ between packages.",
+  "fixture": {
+    "generator": "series_random_walk",
+    "path": "fixtures/adf-002.csv",
+    "sha256": "90b8c0a0b03e99f433da98aa333b052b0debc87c05684bee4fbcd1bdde6ffc27"
+  },
+  "model": {
+    "kind": "adf",
+    "series": "y",
+    "lags": 1,
+    "trend": "c"
+  },
+  "comparison": {
+    "tolerance": {
+      "rtol": 1e-09,
+      "atol": 1e-12,
+      "rationale": "Both sides read identical CSV bytes and solve the same normal equations in IEEE 754 double precision, so the only admissible difference is accumulated rounding from a different factorisation order. That is bounded well below 1e-9 relative on a well conditioned design; anything larger is a definitional disagreement, not noise.",
+      "key_overrides": [
+        {
+          "pattern": "params.*.pvalue",
+          "rtol": 1e-05,
+          "atol": 1e-300,
+          "rationale": "P-values span thirty orders of magnitude, so a fixed absolute floor would make small ones untestable. A purely relative budget of 1e-5 absorbs the amplification of coefficient rounding through the tail integral while still failing a one part in a thousand perturbation. The 1e-300 floor only handles underflow to zero."
+        }
+      ]
+    },
+    "exclude": []
+  }
+}

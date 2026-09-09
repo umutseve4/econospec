@@ -1,0 +1,43 @@
+{
+  "id": "iv-001",
+  "family": "iv2sls",
+  "title": "Two stage least squares with strong overidentifying instruments",
+  "case_type": "nominal",
+  "narrative": "One endogenous regressor, one included exogenous control and two strong excluded instruments. The trap this case guards is the most common 2SLS implementation error: forming the residual from the first stage fitted values instead of the observed regressors, which silently shrinks every standard error. The overidentification degree of freedom must be one, and the first stage exclusion F must be large.",
+  "fixture": {
+    "generator": "iv_strong",
+    "path": "fixtures/iv-001.csv",
+    "sha256": "2553aebe6282ce5e984cc7f6b654395648b58cadb728e6fdefc2587446f25e71"
+  },
+  "model": {
+    "kind": "iv2sls",
+    "response": "y",
+    "exog": [
+      "w"
+    ],
+    "endog": [
+      "d"
+    ],
+    "instruments": [
+      "z1",
+      "z2"
+    ],
+    "intercept": true
+  },
+  "comparison": {
+    "tolerance": {
+      "rtol": 1e-09,
+      "atol": 1e-12,
+      "rationale": "Both sides read identical CSV bytes and solve the same normal equations in IEEE 754 double precision, so the only admissible difference is accumulated rounding from a different factorisation order. That is bounded well below 1e-9 relative on a well conditioned design; anything larger is a definitional disagreement, not noise.",
+      "key_overrides": [
+        {
+          "pattern": "params.*.pvalue",
+          "rtol": 1e-05,
+          "atol": 1e-300,
+          "rationale": "P-values span thirty orders of magnitude, so a fixed absolute floor would make small ones untestable. A purely relative budget of 1e-5 absorbs the amplification of coefficient rounding through the tail integral while still failing a one part in a thousand perturbation. The 1e-300 floor only handles underflow to zero."
+        }
+      ]
+    },
+    "exclude": []
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "id": "fe-002",
+  "family": "panel_fe",
+  "title": "Fixed effects where entity effects are correlated with a regressor",
+  "case_type": "violation",
+  "narrative": "The entity effect enters x1 with a coefficient of 0.8, so pooled ordinary least squares is biased upward while the within estimator remains consistent. This case exists to make the omitted variable bias visible as a number rather than as a claim: the report shows the within estimate next to the pooled estimate on the same fixture, and both implementations must agree on both.",
+  "fixture": {
+    "generator": "panel_confounded",
+    "path": "fixtures/fe-002.csv",
+    "sha256": "3f937bc174a160aa1e6dac864cac4b6b23644ca2e5ad03b53ebc4c5e90c02159"
+  },
+  "model": {
+    "kind": "panel_fe",
+    "response": "y",
+    "regressors": [
+      "x1",
+      "x2"
+    ],
+    "entity": "entity"
+  },
+  "comparison": {
+    "tolerance": {
+      "rtol": 1e-09,
+      "atol": 1e-12,
+      "rationale": "Both sides read identical CSV bytes and solve the same normal equations in IEEE 754 double precision, so the only admissible difference is accumulated rounding from a different factorisation order. That is bounded well below 1e-9 relative on a well conditioned design; anything larger is a definitional disagreement, not noise.",
+      "key_overrides": [
+        {
+          "pattern": "params.*.pvalue",
+          "rtol": 1e-05,
+          "atol": 1e-300,
+          "rationale": "P-values span thirty orders of magnitude, so a fixed absolute floor would make small ones untestable. A purely relative budget of 1e-5 absorbs the amplification of coefficient rounding through the tail integral while still failing a one part in a thousand perturbation. The 1e-300 floor only handles underflow to zero."
+        }
+      ]
+    },
+    "exclude": []
+  }
+}
