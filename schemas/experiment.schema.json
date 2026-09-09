@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://umutseve4.github.io/econospec/schemas/experiment.schema.json",
+  "title": "EconoSpec specification",
+  "description": "The contract for one estimation case. It fixes the data, the model, and the tolerances any two implementations must meet. Prose length rules are enforced by econospec/specs.py, not by this schema, because a schema cannot tell a rationale from filler.",
+  "type": "object",
+  "required": ["id", "family", "title", "case_type", "narrative", "fixture", "model", "comparison"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {"type": "string", "pattern": "^[a-z]+-[0-9]{3}$"},
+    "family": {"enum": ["ols", "iv2sls", "panel_fe", "adf"]},
+    "title": {"type": "string", "minLength": 8},
+    "case_type": {
+      "enum": ["nominal", "violation", "edge"],
+      "description": "Every family carries one of each, so a suite cannot consist only of cases that were always going to pass."
+    },
+    "narrative": {
+      "type": "string",
+      "minLength": 120,
+      "description": "What would be learned if this case ever disagreed."
+    },
+    "fixture": {
+      "type": "object",
+      "required": ["generator", "path", "sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "generator": {"type": "string"},
+        "path": {"type": "string"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "model": {
+      "type": "object",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {"enum": ["ols", "iv2sls", "panel_fe", "adf"]},
+        "response": {"type": "string"},
+        "regressors": {"type": "array", "items": {"type": "string"}},
+        "endog": {"type": "array", "items": {"type": "string"}},
+        "instruments": {"type": "array", "items": {"type": "string"}},
+        "exog": {"type": "array", "items": {"type": "string"}},
+        "entity": {"type": "string"},
+        "series": {"type": "string"},
+        "lags": {"type": "integer", "minimum": 0},
+        "trend": {"enum": ["n", "c", "ct"]},
+        "intercept": {"type": "boolean"},
+        "vcov": {"enum": ["nonrobust", "HC0", "HC1", "HC2", "HC3"]}
+      }
+    },
+    "comparison": {
+      "type": "object",
+      "required": ["tolerance"],
+      "additionalProperties": false,
+      "properties": {
+        "tolerance": {"$ref": "#/$defs/tolerance"},
+        "exclude": {
+          "type": "array",
+          "description": "Keys removed from comparison. Every entry needs a reason, and the reason is rendered in the published report.",
+          "items": {
+            "type": "object",
+            "required": ["key", "reason"],
+            "additionalProperties": false,
+            "properties": {
+              "key": {"type": "string"},
+              "reason": {"type": "string", "minLength": 40}
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "tolerance": {
+      "type": "object",
+      "required": ["rtol", "atol", "rationale"],
+      "additionalProperties": false,
+      "properties": {
+        "rtol": {"type": "number", "minimum": 0},
+        "atol": {"type": "number", "minimum": 0},
+        "rationale": {"type": "string", "minLength": 40},
+        "key_overrides": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["pattern", "rtol", "atol", "rationale"],
+            "additionalProperties": false,
+            "properties": {
+              "pattern": {"type": "string"},
+              "rtol": {"type": "number", "minimum": 0},
+              "atol": {"type": "number", "minimum": 0},
+              "rationale": {"type": "string", "minLength": 40}
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -51,6 +51,29 @@ def test_experiment_schema_enums_track_the_code():
     assert set(schema["properties"]["model"]["properties"]["kind"]["enum"]) == set(FAMILIES)
 
 
+def test_model_schema_describes_exactly_the_keys_the_specs_use():
+    """A schema may not document a field nobody writes, nor miss one everybody does.
+
+    The first version of this schema declared ``endogenous`` and ``exogenous``
+    while every spec and both adapters wrote ``endog`` and ``exog``. Nothing
+    failed, because the model object allowed additional properties, so the
+    published contract quietly described a repository that did not exist.
+    """
+    schema = _schema("experiment.schema.json")
+    model = schema["properties"]["model"]
+    assert model["additionalProperties"] is False, (
+        "an open model object lets a spec key escape the contract unnoticed"
+    )
+    declared = set(model["properties"])
+    used = set()
+    for spec in load_all_specs(ROOT):
+        used |= set(spec["model"])
+    assert used <= declared, "specs use undeclared model keys %s" % sorted(used - declared)
+    assert declared <= used, "the schema declares model keys no spec uses %s" % sorted(
+        declared - used
+    )
+
+
 def test_specs_satisfy_the_declared_prose_minimums():
     schema = _schema("experiment.schema.json")
     narrative_min = schema["properties"]["narrative"]["minLength"]

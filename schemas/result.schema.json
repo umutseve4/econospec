@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://umutseve4.github.io/econospec/schemas/result.schema.json",
+  "title": "EconoSpec result envelope",
+  "description": "What every adapter must emit for every specification, one file per specification. Adapters are compared on the union of their keys, so emitting fewer keys is a failure rather than a smaller comparison.",
+  "type": "object",
+  "required": ["spec_id", "adapter", "params", "scalars"],
+  "additionalProperties": false,
+  "properties": {
+    "spec_id": {"type": "string", "pattern": "^[a-z]+-[0-9]{3}$"},
+    "adapter": {
+      "type": "string",
+      "description": "Stable identifier of the implementation, for example reference-numpy, python-statsmodels, r-base-sandwich-aer-plm."
+    },
+    "params": {
+      "type": "object",
+      "description": "One entry per estimated coefficient, keyed by the regressor name as written in the spec, with const for the intercept.",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["estimate", "se", "tstat"],
+        "additionalProperties": false,
+        "properties": {
+          "estimate": {"type": "number"},
+          "se": {"type": "number", "minimum": 0},
+          "tstat": {"type": "number"},
+          "pvalue": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Omitted entirely for augmented Dickey Fuller specifications, where the statistic is not Student t under the null and published tables are package specific interpolations."
+          }
+        }
+      }
+    },
+    "scalars": {
+      "type": "object",
+      "description": "Fit and diagnostic quantities, recomputed by each adapter from the definitions in the contract rather than read from a library attribute.",
+      "minProperties": 1,
+      "additionalProperties": {"type": "number"}
+    }
+  }
+}
