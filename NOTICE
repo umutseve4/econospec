@@ -1,0 +1,34 @@
+EconoSpec
+Econometric Specification and Verification Lab
+
+Copyright (c) 2026 Umut Sever
+
+This is an independent student project. It is not an official product of
+Bursa Uludag University, of its Faculty of Economics and Administrative
+Sciences, or of its Department of Econometrics, and it does not speak for
+them. No university logo, seal, colour scheme or document template is used
+anywhere in this repository. See POSITIONING.md.
+
+All data files under fixtures/ are synthetic. They are produced by the
+deterministic generators in econospec/dgp.py from fixed seeds, and they
+contain no personal data of any kind.
+
+This software is released under the MIT license. See LICENSE.
+
+Third party software used at test time, under their own licenses:
+
+  numpy            BSD 3-Clause
+  pandas           BSD 3-Clause
+  scipy            BSD 3-Clause
+  statsmodels      BSD 3-Clause
+  linearmodels     University of Illinois/NCSA Open Source License
+  pytest           MIT
+  R                GNU General Public License version 2
+  jsonlite         MIT
+  sandwich         GPL-2 | GPL-3
+  AER              GPL-2 | GPL-3
+  plm              GPL-2 | GPL-3
+  urca             GPL-2 | GPL-3
+
+These packages are dependencies of the test adapters. No third party code is
+vendored into this repository.
