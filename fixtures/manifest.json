@@ -1,0 +1,130 @@
+{
+  "adf-001.csv": {
+    "columns": [
+      "t",
+      "y"
+    ],
+    "generator": "series_stationary",
+    "rows": 300,
+    "sha256": "8fe75d4adbe7147a9736de3f7273944e2fdc7b7a7aa22a5c67651aafbbb5e8ab"
+  },
+  "adf-002.csv": {
+    "columns": [
+      "t",
+      "y"
+    ],
+    "generator": "series_random_walk",
+    "rows": 300,
+    "sha256": "90b8c0a0b03e99f433da98aa333b052b0debc87c05684bee4fbcd1bdde6ffc27"
+  },
+  "adf-003.csv": {
+    "columns": [
+      "t",
+      "y"
+    ],
+    "generator": "series_trend_stationary",
+    "rows": 320,
+    "sha256": "93fe7ba484a2bdd886d91f1e06fb9cb0348315ece517cc7f2d2c500a8046d2bf"
+  },
+  "fe-001.csv": {
+    "columns": [
+      "entity",
+      "period",
+      "y",
+      "x1",
+      "x2"
+    ],
+    "generator": "panel_balanced",
+    "rows": 480,
+    "sha256": "26fdac06aa5ce41cb8298794ffb6cf930952ee00a3157690b87e905fb01fda42"
+  },
+  "fe-002.csv": {
+    "columns": [
+      "entity",
+      "period",
+      "y",
+      "x1",
+      "x2"
+    ],
+    "generator": "panel_confounded",
+    "rows": 500,
+    "sha256": "3f937bc174a160aa1e6dac864cac4b6b23644ca2e5ad03b53ebc4c5e90c02159"
+  },
+  "fe-003.csv": {
+    "columns": [
+      "entity",
+      "period",
+      "y",
+      "x1",
+      "x2"
+    ],
+    "generator": "panel_unbalanced",
+    "rows": 427,
+    "sha256": "7828b652b95a4caf7908052fc981a9996b7f0f9dffa79bbfdfd823bf5fa21403"
+  },
+  "iv-001.csv": {
+    "columns": [
+      "y",
+      "d",
+      "w",
+      "z1",
+      "z2"
+    ],
+    "generator": "iv_strong",
+    "rows": 400,
+    "sha256": "2553aebe6282ce5e984cc7f6b654395648b58cadb728e6fdefc2587446f25e71"
+  },
+  "iv-002.csv": {
+    "columns": [
+      "y",
+      "d",
+      "w",
+      "z1",
+      "z2"
+    ],
+    "generator": "iv_weak",
+    "rows": 400,
+    "sha256": "9be2708189ff6bcfc5321bfbb1e5ceb66c2339a92426d4c3cb643ffc13a2d3c4"
+  },
+  "iv-003.csv": {
+    "columns": [
+      "y",
+      "d",
+      "w",
+      "z1"
+    ],
+    "generator": "iv_just_identified",
+    "rows": 350,
+    "sha256": "149c9da7102be31db35092af3243e795e06cd3b9a547916242d7aec3a9fd3e57"
+  },
+  "ols-001.csv": {
+    "columns": [
+      "y",
+      "x1",
+      "x2"
+    ],
+    "generator": "ols_nominal",
+    "rows": 240,
+    "sha256": "bb46bf41770efdbf2c35b6da243870d9301f851d6a3a01baa2fbef17f3725811"
+  },
+  "ols-002.csv": {
+    "columns": [
+      "y",
+      "x1",
+      "x2"
+    ],
+    "generator": "ols_heteroskedastic",
+    "rows": 300,
+    "sha256": "a355c00c6fd0770a5d45adb1d11ffe23256dce16a2b2a592543d30d38c81b300"
+  },
+  "ols-003.csv": {
+    "columns": [
+      "y",
+      "x1",
+      "x2"
+    ],
+    "generator": "ols_near_collinear",
+    "rows": 180,
+    "sha256": "3626aa2d8d12830e734b53f2167ba09a930e21b4159d1c8133b560d1aba0dc4b"
+  }
+}
