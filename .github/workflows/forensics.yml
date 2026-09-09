@@ -1,0 +1,39 @@
+name: forensics
+
+# Temporary. Runs the suite and copies the tail of the output into an
+# annotation so the failure can be read without downloading the log.
+
+on:
+  repository_dispatch:
+    types: [forensics]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  forensics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Run the suite and report
+        run: |
+          set +e
+          pytest -q -rf --maxfail=40 tests > /tmp/pytest.log 2>&1
+          echo "PYTEST_EXIT=$?" >> /tmp/pytest.log
+          python tools/run_tests.py > /tmp/unittest.log 2>&1
+          echo "UNITTEST_EXIT=$?" >> /tmp/unittest.log
+          python - <<'PY'
+          def emit(title, path, limit):
+              text = open(path, errors="replace").read()
+              tail = text[-limit:]
+              esc = tail.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+              print("::error title=" + title + "::" + esc)
+          emit("pytest", "/tmp/pytest.log", 6000)
+          emit("unittest", "/tmp/unittest.log", 2000)
+          PY
