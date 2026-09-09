@@ -24,13 +24,13 @@ jobs:
           pip install numpy==2.1.3
           python tools/make_specs.py
           git diff --exit-code specs
-      - name: Remove the scaffolding and commit
+      - name: Commit only the files the Actions token is allowed to push
         run: |
-          rm tools/patch_econospec.py
-          rm .github/workflows/patch.yml
-          rm .github/workflows/forensics.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "Apply the tolerance and invariant patch, remove the scaffolding"
+          git rm --quiet tools/patch_econospec.py
+          git add tools/make_specs.py tests/test_conformance.py
+          git status --short
+          test -z "$(git diff --cached --name-only -- .github/workflows)"
+          git commit -m "Tighten the ols-003 p-value budget and assert no tolerance ties with the mutation"
           git push

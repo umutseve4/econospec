@@ -6,6 +6,11 @@ large file safely, so two edits to files of fourteen and eight kilobytes are
 applied here instead of retyping those files from memory. Every replacement
 refuses to proceed unless it matches exactly once, so a partial or duplicated
 application fails loudly rather than producing a plausible looking tree.
+
+Workflow files are deliberately out of scope. The Actions token is not allowed
+to push a change under .github/workflows, so an earlier version of this script
+that also edited conformance.yml produced a commit the runner could not push.
+That edit is made from outside instead.
 """
 
 import io
@@ -72,21 +77,9 @@ CONFORMANCE_NEW = '''def test_no_tolerance_is_wide_enough_to_tie_with_the_mutati
 def test_every_single_compared_value_is_load_bearing():
 '''
 
-WORKFLOW_ANCHOR = '''      - name: Unit and mutation tests
-'''
-
-WORKFLOW_NEW = '''      - name: Specifications must match their generator
-        run: |
-          python tools/make_specs.py
-          git diff --exit-code specs
-
-      - name: Unit and mutation tests
-'''
-
 EDITS = [
     ("tools/make_specs.py", MAKE_SPECS_OLD, MAKE_SPECS_NEW),
     ("tests/test_conformance.py", CONFORMANCE_ANCHOR, CONFORMANCE_NEW),
-    (".github/workflows/conformance.yml", WORKFLOW_ANCHOR, WORKFLOW_NEW),
 ]
 
 
@@ -115,7 +108,7 @@ def main() -> int:
     if text.count("def test_no_tolerance_is_wide_enough_to_tie_with_the_mutation") != 1:
         print("REFUSING: the invariant test did not land exactly once")
         return 1
-    print("all three edits applied")
+    print("both edits applied")
     return 0
 
 
