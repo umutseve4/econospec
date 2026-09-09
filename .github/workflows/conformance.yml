@@ -1,0 +1,121 @@
+name: conformance
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: conformance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  conformance:
+    name: reference, python and r must agree
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Python
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@465b7d8e732ca3921382b1674c59bada9cbf3399 # v2.13.0
+        with:
+          r-version: '4.4.2'
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        run: |
+          Rscript -e 'install.packages(c("jsonlite","sandwich","AER","plm","urca"))'
+
+      - name: Fixtures must match their generators byte for byte
+        run: python tools/gen_fixtures.py --check
+
+      - name: Unit and mutation tests
+        run: pytest -q tests
+
+      - name: Reference kernel
+        run: python tools/run_reference.py --quiet
+
+      - name: Golden manifest must not have drifted
+        run: |
+          python - <<'PY'
+          import json, glob, os, sys
+          bad = []
+          for path in sorted(glob.glob("results/reference/*.json")):
+              name = os.path.basename(path)
+              if name == "environment.json":
+                  continue
+              golden = os.path.join("fixtures/golden", name)
+              if json.load(open(path)) != json.load(open(golden)):
+                  bad.append(name)
+          if bad:
+              print("reference output no longer matches the committed golden manifest:")
+              for name in bad:
+                  print("  " + name)
+              sys.exit(1)
+          print("golden manifest is current")
+          PY
+
+      - name: Python adapter (statsmodels, linearmodels)
+        run: python adapters/python/run_statsmodels.py --out results/python-statsmodels
+
+      - name: R adapter (lm, sandwich, AER, plm, urca)
+        run: Rscript adapters/r/run_r.R --out results/r
+
+      - name: Compare every adapter against the golden manifest
+        run: |
+          python tools/compare_results.py \
+            --require reference python-statsmodels r
+
+      - name: Build the Conformance Observatory
+        if: always()
+        run: python tools/build_report.py
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: conformance-evidence
+          path: |
+            results/
+            site/
+          retention-days: 30
+
+      - name: Upload Pages artifact
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
+        with:
+          path: site
+
+  deploy:
+    name: publish the observatory
+    needs: conformance
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure Pages
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
