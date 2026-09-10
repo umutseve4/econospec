@@ -109,10 +109,15 @@ none of this is statistical or financial advice.
 
 The Conformance Observatory is regenerated on every run and uploaded as the
 `conformance-evidence` artifact, which is where you can read it today. GitHub
-Pages is not enabled for this repository, so there is no published address yet:
-the publish job asks the Pages API first, skips with a notice when the answer
-is 404, and fails the run if the badge above ever claims a live site while the
-API says there is none.
+Pages is not enabled for this repository, so there is no published address yet.
+That expectation is written down in `.github/pages-policy` as
+`PAGES_REQUIRED=false`, and two jobs hold this page to it. One compares the
+README against the policy on every push and every pull request, with no network
+access, and fails if the page badges or links an address the policy does not
+promise. The other asks the Pages API on each push to main: it skips publishing
+when the answer is 404 and the policy expects that, and it fails the run when
+the policy promises a site the API cannot find, so a deployment that quietly
+disappears can never look like a pass.
 
 ---
 
