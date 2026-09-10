@@ -1,0 +1,48 @@
+name: mutation 3
+
+# Throwaway. This branch exists only to prove the readme-claims gate fails on
+# purpose, and it is deleted with the branch once the third verdict is recorded.
+# The README is patched here rather than rewritten from outside, so the only
+# byte that changes is the badge that makes the claim.
+
+on:
+  push:
+    branches: [test/prove-the-readme-gate-20260910]
+
+permissions:
+  contents: write
+
+jobs:
+  overclaim:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Make the README claim a site the policy does not promise
+        run: |
+          python - <<'PY'
+          import io, sys
+          old = "observatory-built%20every%20run-0ea5e9?style=for-the-badge)](https://github.com/umutseve4/econospec/actions/workflows/conformance.yml)"
+          new = "observatory-live-0ea5e9?style=for-the-badge)](https://umutseve4.github.io/econospec/)"
+          with io.open("README.md", "r", encoding="utf-8") as h:
+              text = h.read()
+          hits = text.count(old)
+          if hits != 1:
+              print("REFUSING: anchor found %d times, expected exactly 1" % hits)
+              sys.exit(1)
+          if new in text:
+              print("REFUSING: the overclaim is already present")
+              sys.exit(1)
+          with io.open("README.md", "w", encoding="utf-8", newline="\n") as h:
+              h.write(text.replace(old, new))
+          print("README now claims a live site")
+          PY
+
+      - name: Commit the mutation
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add README.md
+          git commit -m 'Mutation 3: the README badges a live site the policy does not promise'
+          git push

@@ -14,4 +14,4 @@
 # Flip this to true in the same change that turns Pages on under
 # Settings, Pages, Source: GitHub Actions.
 
-PAGES_REQUIRED=maybe
+PAGES_REQUIRED=false
