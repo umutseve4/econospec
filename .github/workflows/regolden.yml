@@ -1,0 +1,77 @@
+name: regolden
+
+# The golden manifest is the reference kernel's own output, so when the kernel
+# changes in its last bits the manifest has to move with it. Doing that by
+# hand invites a quiet edit of a single number, which is exactly the failure
+# mode this repository exists to prevent. This workflow regenerates the whole
+# manifest from tools/run_reference.py and commits it as one visible diff, and
+# it prints the resulting adf-001 constant into an annotation so the value
+# that moved is readable without opening a file.
+#
+# It is deliberately manual. Nothing regenerates expectations on a push.
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [regolden]
+
+permissions:
+  contents: write
+
+jobs:
+  regolden:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.client_payload.branch || github.ref_name }}
+
+      - name: Set up Python
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Regenerate the manifest
+        run: |
+          set -u
+          python tools/run_reference.py --golden --quiet
+          git add -- fixtures/golden
+          git --no-pager diff --cached --stat -- fixtures/golden > /tmp/stat.txt || true
+          python - <<'PY'
+          import json
+          import os
+
+          parts = []
+          with open("/tmp/stat.txt", encoding="utf-8", errors="replace") as handle:
+              parts.append(handle.read().strip() or "no file changed")
+          path = os.path.join("fixtures", "golden", "adf-001.json")
+          if os.path.exists(path):
+              with open(path, encoding="utf-8") as handle:
+                  envelope = json.load(handle)
+              value = envelope.get("params", {}).get("const", {}).get("estimate")
+              parts.append("adf-001 params.const.estimate = %r" % (value,))
+              parts.append("previous values seen in CI: "
+                           "-0.010046320349888798 and -0.010046320349888796")
+          body = "\n".join(parts)
+          escaped = body.replace("%", "%25").replace("\r", "").replace("\n", "%0A")
+          print("::error title=Golden manifest regenerated::" + escaped)
+          PY
+
+      - name: Commit the manifest
+        run: |
+          set -u
+          if git diff --cached --quiet -- fixtures/golden; then
+            echo "the manifest already matches this kernel, nothing to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Regenerate the golden manifest against the exact kernel" -m "Produced by .github/workflows/regolden.yml from tools/run_reference.py --golden. The values move at the 1e-16 level because every reduction now goes through math.fsum instead of a BLAS kernel. No expectation was edited by hand."
+          git push
