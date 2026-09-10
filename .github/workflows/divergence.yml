@@ -1,0 +1,121 @@
+name: divergence
+
+# The determinism workflow proved the bit for bit failure is real: 3 of 30
+# samples, always adf-001 params.const.estimate, always
+# -0.010046320349888796 against -0.010046320349888798. Pinning the linear
+# algebra backend to one thread did not stop it, so the threading hypothesis is
+# dead and this workflow replaces argument with a controlled experiment.
+#
+# Each job runs the same single reference computation in a few hundred separate
+# processes and fingerprints every intermediate along the way. Two arms differ
+# in one variable only, the thread count, so the effect of pinning is measured
+# rather than asserted. The pinned arm is the one allowed to fail the build.
+
+on:
+  workflow_dispatch:
+    inputs:
+      probes:
+        description: 'probes per job'
+        required: false
+        default: '300'
+  repository_dispatch:
+    types: [divergence]
+  pull_request:
+    paths:
+      - '.github/workflows/divergence.yml'
+      - 'tools/divergence_probe.py'
+      - 'tools/divergence_report.py'
+      - 'econospec/**'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: ${{ matrix.mode }} arm, batch ${{ matrix.batch }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [pinned, unpinned]
+        batch: [1, 2, 3]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Record the machine
+        run: |
+          set -u
+          {
+            grep -m1 'model name' /proc/cpuinfo | sed 's/^/cpu    /'
+            nproc | sed 's/^/cores  /'
+            python -c "import numpy; print('numpy  ' + numpy.__version__)"
+          } > /tmp/machine.txt
+          cat /tmp/machine.txt
+
+      - name: Take the sample
+        env:
+          PROBES: ${{ github.event.inputs.probes || '300' }}
+        run: |
+          set -u
+          if [ "${{ matrix.mode }}" = "unpinned" ]; then
+            # setdefault in econospec/__init__.py leaves an explicit value alone,
+            # so exporting here is what makes this arm the control.
+            export OMP_NUM_THREADS=4
+            export OPENBLAS_NUM_THREADS=4
+            export MKL_NUM_THREADS=4
+            export NUMEXPR_NUM_THREADS=4
+            export VECLIB_MAXIMUM_THREADS=4
+          fi
+          : > /tmp/probe.ndjson
+          i=1
+          while [ "$i" -le "$PROBES" ]; do
+            python tools/divergence_probe.py . >> /tmp/probe.ndjson
+            i=$((i + 1))
+          done
+          wc -l < /tmp/probe.ndjson
+
+      - name: Report what the sample shows
+        run: |
+          set -u
+          set +e
+          python tools/divergence_report.py /tmp/probe.ndjson > /tmp/report.txt 2>&1
+          diverged=$?
+          set -e
+          cat /tmp/report.txt
+          {
+            echo "### ${{ matrix.mode }} arm, batch ${{ matrix.batch }}"
+            echo ''
+            echo '```'
+            cat /tmp/machine.txt
+            echo ''
+            cat /tmp/report.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          body=$(cat /tmp/report.txt /tmp/machine.txt)
+          body=${body//'%'/'%25'}
+          body=${body//$'\n'/'%0A'}
+          body=${body//$'\r'/''}
+          echo "::error title=${{ matrix.mode }} arm batch ${{ matrix.batch }} (exit $diverged)::$body"
+          if [ "$diverged" -eq 2 ]; then
+            echo "the probe produced nothing to read"
+            exit 1
+          fi
+          if [ "${{ matrix.mode }}" = "pinned" ] && [ "$diverged" -ne 0 ]; then
+            echo "the pinned arm still diverges, so the pinning is not the answer"
+            exit 1
+          fi
+          echo "arm finished with divergence exit code $diverged"
