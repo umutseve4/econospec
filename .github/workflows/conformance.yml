@@ -102,9 +102,58 @@ jobs:
         with:
           path: site
 
+  readme-claims:
+    name: the README may only claim what the policy promises
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Read the published site policy
+        id: policy
+        run: |
+          set -u
+          file=.github/pages-policy
+          test -f "$file" || {
+            echo "::error title=Policy file missing::$file states whether a published site is promised and every publish decision reads it"
+            exit 1
+          }
+          value=$(grep -E '^PAGES_REQUIRED=' "$file" | tail -n 1 | cut -d= -f2 | tr -d '[:space:]')
+          case "$value" in
+            true|false)
+              echo "required=$value" >> "$GITHUB_OUTPUT"
+              echo "PAGES_REQUIRED=$value"
+              ;;
+            *)
+              echo "::error title=Policy unreadable::PAGES_REQUIRED must be exactly true or false, found '$value'"
+              exit 1
+              ;;
+          esac
+
+      - name: The README and the policy must say the same thing
+        env:
+          REQUIRED: ${{ steps.policy.outputs.required }}
+        run: |
+          set -u
+          claims=$(grep -c -E 'observatory-live|umutseve4\.github\.io/econospec|github\.io/econospec' README.md || true)
+          echo "claims of a published address in README.md: $claims"
+          if [ "$REQUIRED" = "false" ] && [ "$claims" -gt 0 ]; then
+            echo "::error title=README overclaims::the policy promises no published site, so the README may not link or badge one. Found $claims reference(s)."
+            exit 1
+          fi
+          if [ "$REQUIRED" = "true" ] && [ "$claims" -eq 0 ]; then
+            echo "::error title=README underclaims::the policy promises a published site and the README does not link it, so a lost deployment would be invisible to a reader"
+            exit 1
+          fi
+          echo "the README matches the policy" >> "$GITHUB_STEP_SUMMARY"
+          echo "This check never touches the network, so it produces the same verdict on a pull request and on main." >> "$GITHUB_STEP_SUMMARY"
+
   pages-preflight:
     name: is a Pages site configured
-    needs: conformance
+    needs: [conformance, readme-claims]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -119,14 +168,23 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Read the published site policy
+        id: policy
+        run: |
+          set -u
+          value=$(grep -E '^PAGES_REQUIRED=' .github/pages-policy | tail -n 1 | cut -d= -f2 | tr -d '[:space:]')
+          echo "required=$value" >> "$GITHUB_OUTPUT"
+          echo "PAGES_REQUIRED=$value"
+
       - name: Ask the Pages API whether a site exists
         id: probe
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REQUIRED: ${{ steps.policy.outputs.required }}
         run: |
           set -u
           code=$(curl -sS -o /tmp/pages.json -w '%{http_code}' \
-            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/pages")
@@ -134,11 +192,20 @@ jobs:
           case "$code" in
             200)
               echo "configured=true" >> "$GITHUB_OUTPUT"
-              echo "::notice title=Pages is configured::the observatory will be published for this commit"
+              echo "Pages is configured, so the observatory will be published for this commit." >> "$GITHUB_STEP_SUMMARY"
+              if [ "$REQUIRED" = "false" ]; then
+                echo "::notice title=Policy is behind reality::a Pages site exists while .github/pages-policy still says PAGES_REQUIRED=false. Set it to true so a lost deployment fails the run instead of skipping quietly."
+              fi
               ;;
             404)
               echo "configured=false" >> "$GITHUB_OUTPUT"
-              echo "::notice title=Pages is not enabled::the observatory was built and uploaded as the conformance-evidence artifact but not published. Enable it under Settings, Pages, Source: GitHub Actions."
+              if [ "$REQUIRED" = "true" ]; then
+                echo "::error title=Promised site is missing::the policy says PAGES_REQUIRED=true and the Pages API reports no site, so the promise is broken"
+                echo "The policy promises a published site and the Pages API reports none. This run is red on purpose." >> "$GITHUB_STEP_SUMMARY"
+                exit 1
+              fi
+              echo "::notice title=Pages is not enabled::expected, the policy promises no published site. The observatory was built and uploaded as the conformance-evidence artifact. Enable it under Settings, Pages, Source: GitHub Actions."
+              echo "Pages configured: false. Deployment not attempted, which the policy expects. The observatory is in the conformance-evidence artifact of this run." >> "$GITHUB_STEP_SUMMARY"
               ;;
             *)
               echo "::error title=Pages probe inconclusive::HTTP $code is neither 200 nor 404, so the publish decision cannot be made from a measurement"
@@ -146,24 +213,9 @@ jobs:
               ;;
           esac
 
-      - name: The README may not claim a live observatory while the site is off
-        run: |
-          set -u
-          claims_live=0
-          if grep -q 'observatory-live' README.md; then
-            claims_live=1
-          fi
-          echo "README claims a live observatory: $claims_live"
-          echo "Pages configured: ${{ steps.probe.outputs.configured }}"
-          if [ "${{ steps.probe.outputs.configured }}" != "true" ] && [ "$claims_live" = "1" ]; then
-            echo "::error title=README overclaims::the badge says the observatory is live while the Pages API reports no site"
-            exit 1
-          fi
-          echo "the README and the measured Pages state agree"
-
   deploy:
     name: publish the observatory
-    needs: [conformance, pages-preflight]
+    needs: [conformance, readme-claims, pages-preflight]
     if: needs.pages-preflight.outputs.configured == 'true'
     runs-on: ubuntu-latest
     permissions:
