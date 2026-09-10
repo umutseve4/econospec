@@ -7,11 +7,14 @@ name: determinism
 # instead of vanishing with the log.
 #
 # It worked. Two of the first thirty samples failed on adf-001
-# params.const.estimate by two units in the last place, both on the third run of
-# a job, which is the signature of a load dependent OpenBLAS reduction rather
-# than of the model. The cause and the fix are written up in
-# docs/determinism.md. The workflow stays as the standing check that the fix
-# holds, and it runs on any change to the kernel, the suite or itself.
+# params.const.estimate, by one unit in the last place, a relative difference
+# of 1.7267252243215682e-16, on AMD EPYC hardware. The cause was CPU dependent
+# LAPACK kernel selection, not machine load and not thread count: each machine
+# repeats itself exactly, and two jobs pinned to a single thread on different
+# CPU families still disagreed. The fix was to remove dispatched BLAS from the
+# reference path entirely, see econospec/linalg.py and docs/determinism.md.
+# This workflow stays as the standing check that the fix holds, and it runs on
+# any change to the kernel, the suite or itself.
 
 on:
   workflow_dispatch:
