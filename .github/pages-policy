@@ -1,0 +1,17 @@
+# Is a published GitHub Pages site part of this repository's contract?
+#
+# false
+#   The Conformance Observatory is built on every run and uploaded as the
+#   conformance-evidence artifact. No published address is promised. When the
+#   Pages API answers 404 the publish job is skipped and the run stays green,
+#   and the README may not claim a live site.
+#
+# true
+#   A published address is promised. A 404 from the Pages API then fails the
+#   run instead of skipping quietly, and the README is required to link the
+#   site, so silently losing the deployment cannot look like success.
+#
+# Flip this to true in the same change that turns Pages on under
+# Settings, Pages, Source: GitHub Actions.
+
+PAGES_REQUIRED=false
