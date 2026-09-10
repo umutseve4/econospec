@@ -55,13 +55,16 @@ LOOSE = {
     "key_overrides": [
         {
             "pattern": "params.*.pvalue",
-            "rtol": 1e-3,
+            "rtol": 1e-4,
             "atol": 1e-300,
             "rationale": (
                 "The tail integral amplifies the already amplified coefficient "
                 "error on an ill conditioned design, so the p-value budget is "
-                "widened in proportion and the observed divergence is recorded "
-                "in docs/divergences.md rather than hidden."
+                "widened in proportion. It stops at 1e-4 because a budget of "
+                "1e-3 would exactly equal the mutation size and let a real one "
+                "part in a thousand change tie with the tolerance, and any "
+                "divergence beyond this is recorded in docs/divergences.md "
+                "with the measured number rather than absorbed silently."
             ),
         }
     ],

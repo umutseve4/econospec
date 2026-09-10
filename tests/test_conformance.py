@@ -54,6 +54,36 @@ def test_the_manifest_is_not_empty_enough_to_be_meaningless():
         assert len(flatten(_golden(spec["id"]))) >= 10, spec["id"]
 
 
+def test_no_tolerance_is_wide_enough_to_tie_with_the_mutation():
+    """Every relative budget must be strictly tighter than the mutation size.
+
+    A tolerance equal to MUTATION_SIZE puts the comparator on a knife edge: the
+    perturbation and the allowance are the same number, so whether the mutation
+    is caught depends on the last bit of a floating point comparison and can
+    change between machines. It did, once, on params.const.pvalue in ols-003.
+    The invariant is asserted here so the next such tolerance is rejected in
+    review rather than discovered by an intermittently red run.
+    """
+    seen = 0
+    for spec in SPECS:
+        tolerance = spec["comparison"]["tolerance"]
+        budgets = [("default", float(tolerance["rtol"]))]
+        for override in tolerance.get("key_overrides", []):
+            budgets.append((override["pattern"], float(override["rtol"])))
+        for source, rtol in budgets:
+            assert rtol < MUTATION_SIZE, (
+                "%s in %s allows rtol=%g, which is not strictly tighter than "
+                "the mutation size %g" % (source, spec["id"], rtol, MUTATION_SIZE)
+            )
+            assert rtol * 10.0 <= MUTATION_SIZE, (
+                "%s in %s allows rtol=%g, leaving less than a factor of ten "
+                "of margin under the mutation size %g"
+                % (source, spec["id"], rtol, MUTATION_SIZE)
+            )
+            seen += 1
+    assert seen >= len(SPECS), seen
+
+
 def test_every_single_compared_value_is_load_bearing():
     """Perturb one value at a time; the comparator must catch every one."""
     checked = 0
