@@ -1,0 +1,112 @@
+name: determinism
+
+# Issue #3: the same commit was red once and green once at `pytest -q tests`.
+# One green run is one sample. This workflow takes thirty of them, on ten
+# separately allocated runners, and records the CPU and the linear algebra
+# backend each sample used, so a failure names the machine that produced it
+# instead of vanishing with the log.
+#
+# Nothing here is pinned. Pinning thread counts would very likely hide the
+# suspected cause, and a cause that is hidden before it is measured cannot be
+# written into docs/divergences.md with a number next to it.
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [determinism]
+  pull_request:
+    paths:
+      - '.github/workflows/determinism.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  repeat:
+    name: sample set ${{ matrix.set }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        set: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Record the machine
+        run: |
+          set -u
+          python - > /tmp/machine.txt <<'PY'
+          import platform
+          import numpy
+          print("python      %s" % platform.python_version())
+          print("numpy       %s" % numpy.__version__)
+          print("machine     %s" % platform.machine())
+          try:
+              from numpy.__config__ import CONFIG
+              build = CONFIG.get("Build Dependencies", {}).get("blas", {})
+              print("blas name   %s" % build.get("name", "unknown"))
+              print("blas ver    %s" % build.get("version", "unknown"))
+          except Exception as exc:  # noqa: BLE001
+              print("blas        unavailable: %s" % exc)
+          PY
+          grep -m1 'model name' /proc/cpuinfo | sed 's/^/cpu         /' >> /tmp/machine.txt || true
+          nproc | sed 's/^/cores       /' >> /tmp/machine.txt
+          echo "avx512f     $(grep -c -m1 avx512f /proc/cpuinfo || true)" >> /tmp/machine.txt
+          {
+            echo "### sample set ${{ matrix.set }}"
+            echo ''
+            echo '```'
+            cat /tmp/machine.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/machine.txt
+
+      - name: Three independent runs of the suite
+        run: |
+          set -u
+          failed=0
+          for i in 1 2 3; do
+            echo "::group::run $i of sample set ${{ matrix.set }}"
+            set +e
+            pytest -q -rf tests > /tmp/run-$i.txt 2>&1
+            code=$?
+            set -e
+            tail -n 40 /tmp/run-$i.txt
+            echo "::endgroup::"
+            echo "run $i exit code $code"
+            if [ "$code" -ne 0 ]; then
+              failed=$((failed + 1))
+              body=$(tail -n 60 /tmp/run-$i.txt)
+              body=${body//'%'/'%25'}
+              body=${body//$'\n'/'%0A'}
+              body=${body//$'\r'/''}
+              echo "::error title=Sample set ${{ matrix.set }} run $i failed::$body"
+              machine=$(cat /tmp/machine.txt)
+              machine=${machine//'%'/'%25'}
+              machine=${machine//$'\n'/'%0A'}
+              echo "::error title=Machine that produced the failure::$machine"
+            fi
+          done
+          {
+            echo ''
+            echo "sample set ${{ matrix.set }}: $((3 - failed)) of 3 runs green"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$failed" -ne 0 ]; then
+            echo "reproduced the intermittency: $failed of 3 runs red on one machine"
+            exit 1
+          fi
+          echo "three of three green on this machine"
