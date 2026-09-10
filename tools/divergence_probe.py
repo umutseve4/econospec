@@ -1,11 +1,12 @@
 """Print one line of evidence about a single adf-001 reference run.
 
 The golden manifest comparison in tests/test_conformance.py is bit for bit and
-was red in 3 of 30 samples on params.const.estimate. Pinning the linear algebra
-backend to one thread did not stop it, which falsified the first hypothesis. So
-this probe stops arguing and records, for one process:
+has been red on params.const.estimate in every sample taken so far. Pinning the
+linear algebra backend to one thread did not stop it, which falsified the first
+hypothesis. So this probe stops arguing and records, for one process:
 
 * whether the thread pinning was in force,
+* which cpu the process ran on, because the failures cluster by job,
 * a digest of the bytes that went in, so "the inputs were identical" is a
   measurement rather than an assumption,
 * the 64 byte alignment of every array the factorisation touches,
@@ -24,13 +25,19 @@ import json
 import os
 import sys
 
-import econospec  # imported first: it pins the backend before numpy loads
+# Python puts the directory of the script on sys.path, which is tools/, so the
+# package next to it is invisible unless the repository root is added by hand.
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
 
-import numpy as np
+import econospec  # noqa: E402  imported first: it pins the backend before numpy loads
 
-from econospec.csvio import read_frame
-from econospec.estimators import build_adf_design
-from econospec.specs import load_all_specs
+import numpy as np  # noqa: E402
+
+from econospec.csvio import read_frame  # noqa: E402
+from econospec.estimators import build_adf_design  # noqa: E402
+from econospec.specs import load_all_specs  # noqa: E402
 
 SPEC_ID = os.environ.get("PROBE_SPEC", "adf-001")
 
@@ -41,6 +48,17 @@ def digest(array: np.ndarray) -> str:
 
 def alignment(array: np.ndarray) -> int:
     return int(array.__array_interface__["data"][0] % 64)
+
+
+def cpu_model() -> str:
+    try:
+        with open("/proc/cpuinfo", "r", encoding="utf-8") as handle:
+            for line in handle:
+                if line.startswith("model name"):
+                    return line.split(":", 1)[1].strip()
+    except OSError:
+        pass
+    return "unknown"
 
 
 def main(root: str = ".") -> int:
@@ -73,6 +91,7 @@ def main(root: str = ".") -> int:
         "threads": report["variables"]["OPENBLAS_NUM_THREADS"],
         "hashseed": os.environ.get("PYTHONHASHSEED"),
         "numpy": np.__version__,
+        "cpu": cpu_model(),
         "align": {
             "series": alignment(series),
             "X": alignment(X),
