@@ -1,15 +1,15 @@
 name: divergence
 
-# The determinism workflow proved the bit for bit failure is real: 3 of 30
-# samples, always adf-001 params.const.estimate, always
-# -0.010046320349888796 against -0.010046320349888798. Pinning the linear
-# algebra backend to one thread did not stop it, so the threading hypothesis is
-# dead and this workflow replaces argument with a controlled experiment.
+# The determinism workflow proved the bit for bit failure is real: adf-001
+# params.const.estimate returns -0.010046320349888796 where the manifest holds
+# -0.010046320349888798. Pinning the linear algebra backend to one thread did
+# not stop it, so the threading hypothesis is dead and this workflow replaces
+# argument with a controlled experiment.
 #
 # Each job runs the same single reference computation in a few hundred separate
 # processes and fingerprints every intermediate along the way. Two arms differ
 # in one variable only, the thread count, so the effect of pinning is measured
-# rather than asserted. The pinned arm is the one allowed to fail the build.
+# rather than asserted. The pinned arm is the only one allowed to fail the build.
 
 on:
   workflow_dispatch:
@@ -66,6 +66,24 @@ jobs:
           } > /tmp/machine.txt
           cat /tmp/machine.txt
 
+      - name: One probe first, with its traceback carried out of the log
+        run: |
+          set -u
+          set +e
+          python tools/divergence_probe.py . > /tmp/first.json 2> /tmp/first.err
+          code=$?
+          set -e
+          cat /tmp/first.json || true
+          cat /tmp/first.err || true
+          if [ "$code" -ne 0 ]; then
+            body=$(tail -n 40 /tmp/first.err)
+            body=${body//'%'/'%25'}
+            body=${body//$'\n'/'%0A'}
+            body=${body//$'\r'/''}
+            echo "::error title=Probe refused to run (exit $code)::$body"
+            exit 1
+          fi
+
       - name: Take the sample
         env:
           PROBES: ${{ github.event.inputs.probes || '300' }}
@@ -82,11 +100,21 @@ jobs:
           fi
           : > /tmp/probe.ndjson
           i=1
+          errors=0
           while [ "$i" -le "$PROBES" ]; do
-            python tools/divergence_probe.py . >> /tmp/probe.ndjson
+            set +e
+            python tools/divergence_probe.py . >> /tmp/probe.ndjson 2>> /tmp/probe.err
+            [ $? -ne 0 ] && errors=$((errors + 1))
+            set -e
             i=$((i + 1))
           done
-          wc -l < /tmp/probe.ndjson
+          echo "lines $(wc -l < /tmp/probe.ndjson), failed probes $errors"
+          if [ "$errors" -ne 0 ]; then
+            body=$(tail -n 30 /tmp/probe.err)
+            body=${body//'%'/'%25'}
+            body=${body//$'\n'/'%0A'}
+            echo "::error title=${errors} probes of ${PROBES} failed to run::$body"
+          fi
 
       - name: Report what the sample shows
         run: |
@@ -105,7 +133,7 @@ jobs:
             cat /tmp/report.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          body=$(cat /tmp/report.txt /tmp/machine.txt)
+          body=$(cat /tmp/machine.txt /tmp/report.txt)
           body=${body//'%'/'%25'}
           body=${body//$'\n'/'%0A'}
           body=${body//$'\r'/''}
