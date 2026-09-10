@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   patch:
-    name: rewrite one step of conformance.yml in place
+    name: rewrite one step of conformance.yml into ops/
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -19,6 +19,7 @@ jobs:
 
       - name: Replace exactly one line
         run: |
+          mkdir -p ops
           cat > /tmp/new.txt <<'NEW'
           Rscript - <<'R'
           pkgs <- c("jsonlite", "sandwich", "AER", "plm", "urca")
@@ -39,6 +40,7 @@ jobs:
           R
           NEW
           python3 - <<'PY'
+          import hashlib
           path = ".github/workflows/conformance.yml"
           old = "          Rscript -e 'install.packages(c(\"jsonlite\",\"sandwich\",\"AER\",\"plm\",\"urca\"))'\n"
           src = open(path, encoding="utf-8").read()
@@ -49,16 +51,16 @@ jobs:
           new = "".join("          " + line if line.strip() else line
                         for line in body.splitlines(keepends=True))
           out = src.replace(old, new)
-          open(path, "w", encoding="utf-8").write(out)
-          print("bytes %d -> %d" % (len(src), len(out)))
+          data = out.encode("utf-8")
+          open("ops/conformance.patched.yml", "wb").write(data)
+          blob = hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+          print("::error title=Patched file::bytes %d -> %d, blob %s" % (len(src), len(data), blob))
           PY
-          echo "---"
-          sed -n '30,55p' .github/workflows/conformance.yml
 
       - name: Commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/workflows/conformance.yml
-          git commit -m "conformance: prove every R dependency loads before the adapter runs"
+          git add ops/conformance.patched.yml
+          git commit -m "ops: patched conformance.yml awaiting promotion into .github/workflows"
           git push
