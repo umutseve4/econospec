@@ -19,6 +19,15 @@ is a convention question before it is a numerical one):
   with ``cov_type='HC1'``.
 * ``r2`` is centred when the design contains an intercept and uncentred when
   it does not.
+* Every floating point reduction goes through :mod:`econospec.linalg`, which
+  sums exactly and rounds once. No reduction in this module is delegated to a
+  BLAS kernel, because a BLAS kernel is chosen at run time from the CPU and the
+  thread count and therefore is not a function of the input. That is not a
+  hypothesis: docs/determinism.md records the same design returning a different
+  last bit on two CPU families, and a different last bit on one machine when
+  only the thread count changed. numpy is still used here for shape handling,
+  slicing and elementwise arithmetic, all of which are exact or correctly
+  rounded per element.
 """
 
 from __future__ import annotations
@@ -28,6 +37,7 @@ from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 
+from . import linalg as la
 from .distributions import student_t_two_sided_p
 
 __all__ = [
@@ -47,7 +57,7 @@ class RankDeficientError(ValueError):
 
 
 def _check_rank(X: np.ndarray, name: str = "design") -> int:
-    rank = int(np.linalg.matrix_rank(X))
+    rank = la.rank(X)
     if rank < X.shape[1]:
         raise RankDeficientError(
             "%s matrix has %d columns but rank %d" % (name, X.shape[1], rank)
@@ -57,14 +67,11 @@ def _check_rank(X: np.ndarray, name: str = "design") -> int:
 
 def _xtx_inv(X: np.ndarray) -> np.ndarray:
     """Inverse of X'X computed through the QR factorisation of X."""
-    q, r = np.linalg.qr(X)
-    r_inv = np.linalg.solve(r, np.eye(r.shape[0]))
-    return r_inv @ r_inv.T
+    return la.xtx_inv(X)
 
 
 def _solve_ols(X: np.ndarray, y: np.ndarray) -> np.ndarray:
-    q, r = np.linalg.qr(X)
-    return np.linalg.solve(r, q.T @ y)
+    return la.solve_ols(X, y)
 
 
 def _sandwich(
@@ -82,14 +89,14 @@ def _sandwich(
         w = resid ** 2
         scale = n / float(df_resid)
     elif vcov_type in ("HC2", "HC3"):
-        h = np.einsum("ij,jk,ik->i", X, xtx_inv, X)
+        h = la.leverage(X, xtx_inv)
         power = 1.0 if vcov_type == "HC2" else 2.0
         w = resid ** 2 / (1.0 - h) ** power
         scale = 1.0
     else:  # pragma: no cover - guarded by caller
         raise ValueError("unknown robust vcov type %r" % (vcov_type,))
-    meat = (X * w[:, None]).T @ X
-    return scale * (xtx_inv @ meat @ xtx_inv)
+    meat = la.weighted_crossprod(X, w)
+    return scale * la.matmul(la.matmul(xtx_inv, meat), xtx_inv)
 
 
 def _param_table(
@@ -99,13 +106,13 @@ def _param_table(
     df_resid: int,
     with_pvalue: bool = True,
 ) -> Dict[str, Dict[str, float]]:
-    se = np.sqrt(np.diag(vcov))
     out: Dict[str, Dict[str, float]] = {}
     for i, name in enumerate(names):
-        tstat = float(beta[i] / se[i])
+        se = math.sqrt(float(vcov[i][i]))
+        tstat = float(beta[i]) / se
         entry = {
             "estimate": float(beta[i]),
-            "se": float(se[i]),
+            "se": se,
             "tstat": tstat,
         }
         if with_pvalue:
@@ -117,12 +124,11 @@ def _param_table(
 def _fit_stats(
     y: np.ndarray, resid: np.ndarray, has_const: bool
 ) -> Dict[str, float]:
-    n = y.shape[0]
-    ss_resid = float(resid @ resid)
+    ss_resid = la.sumsq(resid)
     if has_const:
-        ss_total = float(((y - y.mean()) ** 2).sum())
+        ss_total = la.sumsq(y - la.mean(y))
     else:
-        ss_total = float((y ** 2).sum())
+        ss_total = la.sumsq(y)
     return {"ss_resid": ss_resid, "ss_total": ss_total}
 
 
@@ -151,7 +157,7 @@ def ols(
         raise ValueError("non positive residual degrees of freedom")
 
     beta = _solve_ols(X, y)
-    resid = y - X @ beta
+    resid = y - la.matvec(X, beta)
     ss = _fit_stats(y, resid, has_const)
     sigma2 = ss["ss_resid"] / df_resid
     xtx_inv = _xtx_inv(X)
@@ -212,17 +218,17 @@ def iv2sls(
     _check_rank(Z, "instrument")
 
     ztz_inv = _xtx_inv(Z)
-    pi = ztz_inv @ (Z.T @ X)
-    xhat = Z @ pi
+    pi = la.matmul(ztz_inv, la.crossprod(Z, X))
+    xhat = la.matmul(Z, pi)
     _check_rank(xhat, "projected design")
     beta = _solve_ols(xhat, y)
-    resid = y - X @ beta
+    resid = y - la.matvec(X, beta)
     df_resid = n - k
-    ss_resid = float(resid @ resid)
+    ss_resid = la.sumsq(resid)
     sigma2 = ss_resid / df_resid
     vcov = sigma2 * _xtx_inv(xhat)
 
-    ss_total = float(((y - y.mean()) ** 2).sum())
+    ss_total = la.sumsq(y - la.mean(y))
     r2 = 1.0 - ss_resid / ss_total
 
     scalars: Dict[str, float] = {
@@ -240,9 +246,9 @@ def iv2sls(
     if endog is not None and Z_exog is not None and n_endog == 1:
         d = np.asarray(endog, dtype=float).ravel()
         beta_u = _solve_ols(Z, d)
-        rss_u = float(((d - Z @ beta_u) ** 2).sum())
+        rss_u = la.sumsq(d - la.matvec(Z, beta_u))
         beta_r = _solve_ols(Z_exog, d)
-        rss_r = float(((d - Z_exog @ beta_r) ** 2).sum())
+        rss_r = la.sumsq(d - la.matvec(Z_exog, beta_r))
         df_u = n - Z.shape[1]
         f_stat = ((rss_r - rss_u) / n_excluded) / (rss_u / df_u)
         scalars["first_stage_F"] = float(f_stat)
@@ -270,14 +276,15 @@ def panel_fe(
     entity = np.asarray(entity)
     n, k = X.shape
     codes, inverse = np.unique(entity, return_inverse=True)
+    inverse = np.asarray(inverse).ravel()
     n_entities = int(codes.shape[0])
 
-    counts = np.bincount(inverse).astype(float)
-    y_mean = np.bincount(inverse, weights=y) / counts
+    counts = la.group_counts(inverse, n_entities)
+    y_mean = la.group_sums(inverse, y, n_entities) / counts
     yd = y - y_mean[inverse]
     Xd = np.empty_like(X)
     for j in range(k):
-        col_mean = np.bincount(inverse, weights=X[:, j]) / counts
+        col_mean = la.group_sums(inverse, X[:, j], n_entities) / counts
         Xd[:, j] = X[:, j] - col_mean[inverse]
 
     _check_rank(Xd, "within design")
@@ -286,11 +293,11 @@ def panel_fe(
         raise ValueError("non positive residual degrees of freedom")
 
     beta = _solve_ols(Xd, yd)
-    resid = yd - Xd @ beta
-    ss_resid = float(resid @ resid)
+    resid = yd - la.matvec(Xd, beta)
+    ss_resid = la.sumsq(resid)
     sigma2 = ss_resid / df_resid
     vcov = sigma2 * _xtx_inv(Xd)
-    ss_within = float((yd ** 2).sum())
+    ss_within = la.sumsq(yd)
     r2_within = 1.0 - ss_resid / ss_within
 
     return {
@@ -381,8 +388,8 @@ def adf(series: np.ndarray, lags: int, trend: str) -> Dict[str, object]:
         raise ValueError("non positive residual degrees of freedom")
 
     beta = _solve_ols(X, lhs)
-    resid = lhs - X @ beta
-    ss_resid = float(resid @ resid)
+    resid = lhs - la.matvec(X, beta)
+    ss_resid = la.sumsq(resid)
     sigma2 = ss_resid / df_resid
     vcov = sigma2 * _xtx_inv(X)
     params = _param_table(names, beta, vcov, df_resid, with_pvalue=False)
