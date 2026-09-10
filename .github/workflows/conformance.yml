@@ -40,7 +40,23 @@ jobs:
 
       - name: Install R dependencies
         run: |
-          Rscript -e 'install.packages(c("jsonlite","sandwich","AER","plm","urca"))'
+          Rscript - <<'R'
+          pkgs <- c("jsonlite", "sandwich", "AER", "plm", "urca")
+          repos <- unique(c(getOption("repos"), "https://cloud.r-project.org"))
+          install.packages(pkgs, repos = repos)
+          loads <- function(p) requireNamespace(p, quietly = TRUE)
+          missing <- pkgs[!vapply(pkgs, loads, logical(1))]
+          for (p in missing) {
+            cat(sprintf("%s did not load after the binary install, retrying from source\n", p))
+            try(install.packages(p, repos = "https://cloud.r-project.org", type = "source"))
+          }
+          missing <- pkgs[!vapply(pkgs, loads, logical(1))]
+          if (length(missing)) {
+            cat(sprintf("::error title=R dependency unusable::%s installed without reporting an error but cannot be loaded, so the R adapter would have failed several steps later with a misleading message\n", paste(missing, collapse = ", ")))
+            quit(status = 1)
+          }
+          cat(sprintf("every R dependency loads: %s\n", paste(pkgs, collapse = ", ")))
+          R
 
       - name: Fixtures must match their generators byte for byte
         run: python tools/gen_fixtures.py --check
