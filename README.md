@@ -7,7 +7,7 @@
 **The same model, estimated by three independent implementations, compared value by value inside tolerances that each carry a written justification.**
 
 [![conformance](https://img.shields.io/github/actions/workflow/status/umutseve4/econospec/conformance.yml?branch=main&label=conformance&style=for-the-badge&color=e11d48)](https://github.com/umutseve4/econospec/actions/workflows/conformance.yml)
-[![observatory](https://img.shields.io/badge/observatory-live-0ea5e9?style=for-the-badge)](https://umutseve4.github.io/econospec/)
+[![observatory](https://img.shields.io/badge/observatory-built%20every%20run-0ea5e9?style=for-the-badge)](https://github.com/umutseve4/econospec/actions/workflows/conformance.yml)
 [![specifications](https://img.shields.io/badge/specifications-12-8b5cf6?style=for-the-badge)](specs/)
 [![implementations](https://img.shields.io/badge/implementations-3-f59e0b?style=for-the-badge)](adapters/)
 [![license](https://img.shields.io/badge/license-MIT-22c55e?style=for-the-badge)](LICENSE)
@@ -106,6 +106,18 @@ records where implementations genuinely differ and why, including the ADF trend
 parameterisation and the fact that R package versions are resolved at run time
 rather than pinned. Findings are educational, not a statistical service, and
 none of this is statistical or financial advice.
+
+The Conformance Observatory is regenerated on every run and uploaded as the
+`conformance-evidence` artifact, which is where you can read it today. GitHub
+Pages is not enabled for this repository, so there is no published address yet.
+That expectation is written down in `.github/pages-policy` as
+`PAGES_REQUIRED=false`, and two jobs hold this page to it. One compares the
+README against the policy on every push and every pull request, with no network
+access, and fails if the page badges or links an address the policy does not
+promise. The other asks the Pages API on each push to main: it skips publishing
+when the answer is 404 and the policy expects that, and it fails the run when
+the policy promises a site the API cannot find, so a deployment that quietly
+disappears can never look like a pass.
 
 ---
 
