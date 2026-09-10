@@ -6,9 +6,12 @@ name: determinism
 # backend each sample used, so a failure names the machine that produced it
 # instead of vanishing with the log.
 #
-# Nothing here is pinned. Pinning thread counts would very likely hide the
-# suspected cause, and a cause that is hidden before it is measured cannot be
-# written into docs/divergences.md with a number next to it.
+# It worked. Two of the first thirty samples failed on adf-001
+# params.const.estimate by two units in the last place, both on the third run of
+# a job, which is the signature of a load dependent OpenBLAS reduction rather
+# than of the model. The cause and the fix are written up in
+# docs/determinism.md. The workflow stays as the standing check that the fix
+# holds, and it runs on any change to the kernel, the suite or itself.
 
 on:
   workflow_dispatch:
@@ -17,6 +20,9 @@ on:
   pull_request:
     paths:
       - '.github/workflows/determinism.yml'
+      - 'econospec/**'
+      - 'tests/**'
+      - 'docs/determinism.md'
 
 permissions:
   contents: read
