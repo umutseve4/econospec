@@ -7,7 +7,7 @@
 **The same model, estimated by three independent implementations, compared value by value inside tolerances that each carry a written justification.**
 
 [![conformance](https://img.shields.io/github/actions/workflow/status/umutseve4/econospec/conformance.yml?branch=main&label=conformance&style=for-the-badge&color=e11d48)](https://github.com/umutseve4/econospec/actions/workflows/conformance.yml)
-[![observatory](https://img.shields.io/badge/observatory-built%20every%20run-0ea5e9?style=for-the-badge)](https://github.com/umutseve4/econospec/actions/workflows/conformance.yml)
+[![observatory](https://img.shields.io/badge/observatory-live-0ea5e9?style=for-the-badge)](https://umutseve4.github.io/econospec/)
 [![specifications](https://img.shields.io/badge/specifications-12-8b5cf6?style=for-the-badge)](specs/)
 [![implementations](https://img.shields.io/badge/implementations-3-f59e0b?style=for-the-badge)](adapters/)
 [![license](https://img.shields.io/badge/license-MIT-22c55e?style=for-the-badge)](LICENSE)
