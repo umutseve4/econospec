@@ -4,19 +4,31 @@ An independent student project. Not an official product of Bursa Uludag
 University or its Department of Econometrics.
 
 Importing this package pins the linear algebra backend to a single thread
-before numpy is loaded. This is not a performance decision. A multithreaded
-OpenBLAS splits a reduction across threads, and the split it chooses depends on
-how busy the machine is at that moment, so the same dot product can come back
-with a different last bit on the same runner minutes apart. The suite asserts
-that the reference kernel reproduces the committed golden manifest bit for bit,
-and that claim is only defensible when the summation order is fixed. Measured
-case, recorded in docs/determinism.md: adf-001 params.const.estimate returned
--0.010046320349888796 where the manifest holds -0.010046320349888798, two units
-in the last place apart, on an Intel Xeon Platinum 8370C.
+before numpy is loaded. An earlier version of this docstring said that pinning
+is what makes the bit for bit claim in tests/test_conformance.py defensible.
+The determinism hunt on this branch measured that claim and it did not hold,
+so here is what pinning does and does not do.
+
+What it does: removes one source of variation. A multithreaded reduction is
+blocked across threads, and the blocking changes the summation order.
+
+What it does not do: make the kernel reproducible. Thirty samples on ten
+runners, pinned and unpinned, produced two distinct values for adf-001
+params.const.estimate: -0.010046320349888796 on an Intel Xeon Platinum 8573C
+and on an AMD EPYC 9V45, both pinned to one thread, against
+-0.010046320349888798 on an AMD EPYC 7763 pinned to one thread and on every
+runner at four threads. One unit in the last place, a relative difference of
+1.7267252243215682e-16. Two jobs pinned to a single thread disagreeing with
+each other is the whole answer: the kernel is also selected from the
+instruction set the CPU reports, and no environment variable reaches that.
+
+The fix is :mod:`econospec.linalg`, which sums exactly and never calls a
+dispatched reduction. Pinning stays as hygiene, and tests/test_determinism.py
+keeps asserting it, so the environment behind the numbers is a stated fact
+rather than an accident. See docs/determinism.md for the full measurement.
 
 The variables are set with setdefault, so an operator who deliberately exports
-OMP_NUM_THREADS keeps control. tests/test_determinism.py then fails loudly
-rather than letting the bit for bit assertion become intermittent again.
+OMP_NUM_THREADS keeps control.
 """
 
 from __future__ import annotations
@@ -54,7 +66,16 @@ def thread_pinning_report() -> dict:
     }
 
 
-from . import compare, csvio, dgp, distributions, estimators, runner, specs  # noqa: E402
+from . import (  # noqa: E402
+    compare,
+    csvio,
+    dgp,
+    distributions,
+    estimators,
+    linalg,
+    runner,
+    specs,
+)
 
 __all__ = [
     "__version__",
@@ -66,6 +87,7 @@ __all__ = [
     "dgp",
     "distributions",
     "estimators",
+    "linalg",
     "runner",
     "specs",
 ]
