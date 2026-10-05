@@ -150,6 +150,25 @@ def test_nan_only_matches_nan():
     assert is_green(records)
 
 
+def test_infinity_only_matches_the_same_infinity():
+    spec = SPECS[0]
+    golden = flatten(_golden(spec["id"]))
+    key = sorted(golden)[0]
+    same = dict(golden)
+    same_other = dict(golden)
+    same[key] = float("inf")
+    same_other[key] = float("inf")
+    assert is_green(compare_flat(same, same_other, spec, "a", "b"))
+
+    flipped = dict(golden)
+    flipped[key] = float("-inf")
+    records = compare_flat(same, flipped, spec, "a", "b")
+    assert not is_green(records)
+    failures = [r for r in records if r["status"] == "fail"]
+    assert len(failures) == 1
+    assert "infinities differ" in failures[0]["reason"]
+
+
 def test_tolerance_overrides_resolve_by_pattern():
     spec = [s for s in SPECS if s["id"] == "ols-001"][0]
     tol = spec["comparison"]["tolerance"]
@@ -192,6 +211,19 @@ def test_tiny_pvalues_keep_their_resolution():
     left[key] = 1e-40
     right[key] = 2e-40  # a factor of two apart, and both far below 1e-12
     assert not is_green(compare_flat(left, right, spec, "left", "right"))
+
+
+def test_failures_include_actionable_numeric_diagnostics():
+    spec = [s for s in SPECS if s["id"] == "ols-001"][0]
+    golden = flatten(_golden("ols-001"))
+    key = [k for k in sorted(golden) if k.endswith(".estimate")][0]
+    mutated = dict(golden)
+    mutated[key] = golden[key] + 1.0
+    records = compare_flat(mutated, golden, spec, "mutant", "golden")
+    failed = [r for r in records if r["status"] == "fail"]
+    assert len(failed) == 1
+    assert "abs diff" in failed[0]["reason"]
+    assert "source" in failed[0]["reason"]
 
 
 def test_exclusions_apply_only_to_declared_patterns():

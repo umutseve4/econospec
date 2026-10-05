@@ -131,6 +131,24 @@ def test_rank_deficient_design_raises_instead_of_returning_a_number():
     raise AssertionError("a duplicated column must not produce an estimate")
 
 
+def test_ols_rejects_non_finite_inputs():
+    y, X, names = _design()
+    bad_y = y.copy()
+    bad_y[3] = np.nan
+    bad_x = X.copy()
+    bad_x[4, 1] = np.inf
+    for y_in, x_in, expected in (
+        (bad_y, X, "y contains non-finite"),
+        (y, bad_x, "X contains non-finite"),
+    ):
+        try:
+            estimators.ols(y_in, x_in, names)
+        except ValueError as exc:
+            assert expected in str(exc), str(exc)
+            continue
+        raise AssertionError("expected ValueError for non-finite %s" % expected.split()[0])
+
+
 def test_panel_within_estimator_equals_least_squares_with_dummies():
     frame = read_frame("fixtures/fe-001.csv")
     y = frame["y"].astype(float)
@@ -251,6 +269,40 @@ def test_just_identified_case_reports_zero_overidentification_df():
     assert fit["scalars"]["n_instruments"] == 3
 
 
+def test_2sls_rejects_non_finite_inputs():
+    frame = read_frame("fixtures/iv-001.csv")
+    n = len(frame["y"])
+    y = frame["y"].astype(float)
+    X = np.column_stack([np.ones(n), frame["w"], frame["d"]]).astype(float)
+    Z = np.column_stack([np.ones(n), frame["w"], frame["z1"], frame["z2"]]).astype(float)
+    Z_exog = np.column_stack([np.ones(n), frame["w"]]).astype(float)
+
+    bad_z = Z.copy()
+    bad_z[7, 2] = np.nan
+    try:
+        estimators.iv2sls(
+            y, X, bad_z, ["const", "w", "d"], n_endog=1, n_excluded=2, endog=frame["d"], Z_exog=Z_exog
+        )
+    except ValueError as exc:
+        assert "Z contains non-finite" in str(exc), str(exc)
+    else:
+        raise AssertionError("expected ValueError for non-finite instrument matrix")
+
+
+def test_panel_fe_rejects_non_finite_inputs():
+    frame = read_frame("fixtures/fe-001.csv")
+    y = frame["y"].astype(float)
+    X = np.column_stack([frame["x1"], frame["x2"]]).astype(float)
+    bad = X.copy()
+    bad[0, 0] = np.inf
+    try:
+        estimators.panel_fe(y, bad, frame["entity"], ["x1", "x2"])
+    except ValueError as exc:
+        assert "X contains non-finite" in str(exc), str(exc)
+    else:
+        raise AssertionError("expected ValueError for non-finite panel regressor")
+
+
 def test_adf_design_is_built_exactly_as_documented():
     y = np.arange(1.0, 11.0) ** 1.5
     design = estimators.build_adf_design(y, lags=2, trend="ct")
@@ -308,3 +360,14 @@ def test_adf_rejects_an_impossible_lag_order():
         except ValueError:
             continue
         raise AssertionError("expected ValueError for %r" % (args,))
+
+
+def test_adf_rejects_non_finite_series():
+    y = np.arange(20.0)
+    y[5] = np.nan
+    try:
+        estimators.adf(y, 1, "c")
+    except ValueError as exc:
+        assert "series contains non-finite" in str(exc), str(exc)
+        return
+    raise AssertionError("expected ValueError for non-finite ADF input")
