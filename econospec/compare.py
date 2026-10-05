@@ -52,6 +52,10 @@ def excluded_reason(key: str, comparison_block: dict) -> Optional[str]:
 def _within(a: float, b: float, rtol: float, atol: float) -> Tuple[bool, float, float]:
     if math.isnan(a) or math.isnan(b):
         return (math.isnan(a) and math.isnan(b), float("nan"), float("nan"))
+    if math.isinf(a) or math.isinf(b):
+        if a == b:
+            return True, 0.0, 0.0
+        return False, float("inf"), 0.0
     diff = abs(a - b)
     allowed = atol + rtol * abs(b)
     return diff <= allowed, diff, allowed
@@ -98,6 +102,17 @@ def compare_flat(
             continue
         rtol, atol, source = tolerance_for(key, tolerance)
         ok, diff, allowed = _within(left[key], right[key], rtol, atol)
+        if ok:
+            reason = ""
+        elif math.isnan(diff):
+            reason = "non-finite mismatch: NaN only matches NaN for both sides"
+        elif math.isinf(diff):
+            reason = "non-finite mismatch: infinities differ in sign or finiteness"
+        else:
+            reason = (
+                "abs diff %.16g exceeds allowed %.16g (rtol %.16g, atol %.16g, source %s)"
+                % (diff, allowed, rtol, atol, source)
+            )
         records.append(
             {
                 "spec_id": spec["id"],
@@ -105,6 +120,7 @@ def compare_flat(
                 "left": left_name,
                 "right": right_name,
                 "status": "pass" if ok else "fail",
+                "reason": reason,
                 "left_value": left[key],
                 "right_value": right[key],
                 "abs_diff": diff,

@@ -56,6 +56,16 @@ class RankDeficientError(ValueError):
     """Raised when a design matrix does not have full column rank."""
 
 
+def _require_finite(values: np.ndarray, name: str) -> None:
+    bad = np.argwhere(~np.isfinite(values))
+    if bad.size:
+        index = tuple(int(i) for i in bad[0])
+        raise ValueError(
+            "%s contains non-finite value %r at index %r"
+            % (name, float(values[index]), index)
+        )
+
+
 def _check_rank(X: np.ndarray, name: str = "design") -> int:
     rank = la.rank(X)
     if rank < X.shape[1]:
@@ -150,6 +160,8 @@ def ols(
         raise ValueError("X and y have different row counts")
     if len(names) != X.shape[1]:
         raise ValueError("names length does not match the number of columns")
+    _require_finite(y, "y")
+    _require_finite(X, "X")
     n, k = X.shape
     rank = _check_rank(X, "OLS design")
     df_resid = n - k
@@ -209,11 +221,18 @@ def iv2sls(
     y = np.asarray(y, dtype=float)
     X = np.asarray(X, dtype=float)
     Z = np.asarray(Z, dtype=float)
+    if X.shape[0] != y.shape[0]:
+        raise ValueError("X and y have different row counts")
     n, k = X.shape
+    if len(names) != k:
+        raise ValueError("names length does not match the number of columns")
     if Z.shape[0] != n:
         raise ValueError("Z and X have different row counts")
     if Z.shape[1] < k:
         raise ValueError("under identified: fewer instruments than regressors")
+    _require_finite(y, "y")
+    _require_finite(X, "X")
+    _require_finite(Z, "Z")
     _check_rank(X, "structural design")
     _check_rank(Z, "instrument")
 
@@ -224,6 +243,8 @@ def iv2sls(
     beta = _solve_ols(xhat, y)
     resid = y - la.matvec(X, beta)
     df_resid = n - k
+    if df_resid <= 0:
+        raise ValueError("non positive residual degrees of freedom")
     ss_resid = la.sumsq(resid)
     sigma2 = ss_resid / df_resid
     vcov = sigma2 * _xtx_inv(xhat)
@@ -245,11 +266,22 @@ def iv2sls(
 
     if endog is not None and Z_exog is not None and n_endog == 1:
         d = np.asarray(endog, dtype=float).ravel()
+        if d.shape[0] != n:
+            raise ValueError("endog and X have different row counts")
+        _require_finite(d, "endog")
+        Z_exog = np.asarray(Z_exog, dtype=float)
+        if Z_exog.shape[0] != n:
+            raise ValueError("Z_exog and X have different row counts")
+        _require_finite(Z_exog, "Z_exog")
+        if n_excluded <= 0:
+            raise ValueError("n_excluded must be positive when first-stage F is requested")
         beta_u = _solve_ols(Z, d)
         rss_u = la.sumsq(d - la.matvec(Z, beta_u))
         beta_r = _solve_ols(Z_exog, d)
         rss_r = la.sumsq(d - la.matvec(Z_exog, beta_r))
         df_u = n - Z.shape[1]
+        if df_u <= 0:
+            raise ValueError("non positive first-stage residual degrees of freedom")
         f_stat = ((rss_r - rss_u) / n_excluded) / (rss_u / df_u)
         scalars["first_stage_F"] = float(f_stat)
         scalars["first_stage_df_num"] = int(n_excluded)
@@ -274,7 +306,15 @@ def panel_fe(
     y = np.asarray(y, dtype=float)
     X = np.asarray(X, dtype=float)
     entity = np.asarray(entity)
+    if X.shape[0] != y.shape[0]:
+        raise ValueError("X and y have different row counts")
+    if entity.shape[0] != y.shape[0]:
+        raise ValueError("entity and y have different row counts")
     n, k = X.shape
+    if len(names) != k:
+        raise ValueError("names length does not match the number of columns")
+    _require_finite(y, "y")
+    _require_finite(X, "X")
     codes, inverse = np.unique(entity, return_inverse=True)
     inverse = np.asarray(inverse).ravel()
     n_entities = int(codes.shape[0])
@@ -336,6 +376,7 @@ def build_adf_design(
     if lags < 0:
         raise ValueError("lags must be non negative")
     y = np.asarray(series, dtype=float).ravel()
+    _require_finite(y, "series")
     T = y.shape[0]
     n_eff = T - lags - 1
     if n_eff <= 0:
